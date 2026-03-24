@@ -28,7 +28,7 @@ function setCanvasSize() {
 // Tile-mappning: vilket område i tilesetet motsvarar ett tecken
 const tileMap = {
   '#': { tx: 4, ty: 4 },
-  '.': { tx: 7, ty: 7 },
+  '.': { tx: 1, ty: 14 },
   'P': { tx: 2, ty: 0 }
 };
 
@@ -42,14 +42,14 @@ let playerSpriteLoaded = false;
 let playerFrame = 0;
 let playerFrameCount = 1;
 let playerFrameWidth = 16;
-let playerFrameHeight = 16;
+let playerFrameHeight = 32;
 let playerRow = 0;
 let playerFrameStart = 9;
 let playerAnimLength = 5;
 let playerSourceYOffset = 0;
-let playerDrawScale = 2;
+let playerDrawScale = 1.67;
 let playerFeetY = 16;
-let fitToTile = true;
+let fitToTile = false;
 let frameTick = 0;
 const frameTickRate = 10;
 
