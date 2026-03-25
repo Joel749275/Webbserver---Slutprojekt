@@ -19,7 +19,6 @@ const map = [
   "####################"
 ];
 
-// Anpassa canvas efter kartan
 function setCanvasSize() {
   canvas.width = map[0].length * tileSize;
   canvas.height = map.length * tileSize;
@@ -36,16 +35,21 @@ const tileMap = {
 let tilesetLoaded = false;
 let gameStarted = false;
 
-const playerSprite = new Image();
+const playerSprite = new Image(); // Idle
 playerSprite.src = "assets\\Modern tiles_Free\\Characters_free\\Bob_idle_anim_16x16.png";
 let playerSpriteLoaded = false;
+
+const runSprite = new Image(); // Run
+runSprite.src = "assets\\Modern tiles_Free\\Characters_free\\Bob_run_16x16.png";
+let runSpriteLoaded = false;
+
 let playerFrame = 0;
 let playerFrameCount = 1;
 let playerFrameWidth = 16;
 let playerFrameHeight = 32;
 let playerRow = 0;
-let playerFrameStart = 9;
-let playerAnimLength = 5;
+let playerFrameStart = 6;
+let playerAnimLength = 6;
 let playerSourceYOffset = 0;
 let playerDrawScale = 1.67;
 let playerFeetY = 16;
@@ -53,78 +57,138 @@ let fitToTile = false;
 let frameTick = 0;
 const frameTickRate = 10;
 
-// Starta spelet när tileset är laddat
+// Animation state
+let currentImage;
+let currentRow = 0;
+let currentFrameStart = 6;
+let currentAnimLength = 6;
+let isMoving = false;
+let direction = 3;      // 3 = down (framåt)
+let prevDirection = 3;
+
 tileset.onload = () => {
   tilesetLoaded = true;
-  if (playerSpriteLoaded) {
-    setCanvasSize();
-    if (!gameStarted) {
-      gameStarted = true;
-      gameLoop();
-    }
-  }
+  startGameIfReady();
 };
 
 if (tileset.complete) {
   tilesetLoaded = true;
-  if (playerSprite.complete) {
-    playerSpriteLoaded = true;
-    playerFrameCount = Math.max(1, Math.floor(playerSprite.width / playerFrameWidth));
-    if (playerFrameStart + playerAnimLength > playerFrameCount) {
-      playerAnimLength = Math.max(1, playerFrameCount - playerFrameStart);
-    }
-    setCanvasSize();
-    gameStarted = true;
-    gameLoop();
-  }
+  startGameIfReady();
 }
 
-// Starta spelet när player-spritesheet är laddad
+// Player sprite onload
 playerSprite.onload = () => {
   playerSpriteLoaded = true;
   playerFrameCount = Math.max(1, Math.floor(playerSprite.width / playerFrameWidth));
-  if (playerFrameStart + playerAnimLength > playerFrameCount) {
-    playerAnimLength = Math.max(1, playerFrameCount - playerFrameStart);
-  }
-  if (tilesetLoaded && !gameStarted) {
-    setCanvasSize();
-    gameStarted = true;
-    gameLoop();
-  }
+  playerAnimLength = Math.max(1, playerFrameCount - playerFrameStart);
+  console.log('Idle size:', playerSprite.naturalWidth, 'x', playerSprite.naturalHeight);
+  startGameIfReady();
 };
 
 if (playerSprite.complete) {
   playerSpriteLoaded = true;
   playerFrameCount = Math.max(1, Math.floor(playerSprite.width / playerFrameWidth));
-  if (playerFrameStart + playerAnimLength > playerFrameCount) {
-    playerAnimLength = Math.max(1, playerFrameCount - playerFrameStart);
+  playerAnimLength = Math.max(1, playerFrameCount - playerFrameStart);
+}
+
+// Run sprite onload
+runSprite.onload = () => {
+  runSpriteLoaded = true;
+  console.log('Run size:', runSprite.naturalWidth, 'x', runSprite.naturalHeight);
+  startGameIfReady();
+};
+
+if (runSprite.complete) {
+  runSpriteLoaded = true;
+}
+
+function startGameIfReady() {
+  if (tilesetLoaded && playerSpriteLoaded && runSpriteLoaded && !gameStarted) {
+    setCanvasSize();
+    gameStarted = true;
+    gameLoop();
+  } else if (tilesetLoaded && playerSpriteLoaded && !gameStarted) {
+    setCanvasSize();
+    gameStarted = true;
+    gameLoop();
   }
 }
 
 // Spelarposition och kontroller
-const player = { x: 5, y: 5 };
+const player = { x: 5, y: 5, vx: 0, vy: 0 };
 
 const keys = {};
+const moveSpeed = 0.13;
+
 document.addEventListener("keydown", (e) => { keys[e.key] = true; });
 document.addEventListener("keyup", (e) => { keys[e.key] = false; });
 
-// Uppdatera: rörelse och kollision
-function update() {
-  let newX = player.x;
-  let newY = player.y;
-  if (keys["ArrowUp"] || keys["w"]) newY--;
-  if (keys["ArrowDown"] || keys["s"]) newY++;
-  if (keys["ArrowLeft"] || keys["a"]) newX--;
-  if (keys["ArrowRight"] || keys["d"]) newX++;
+function updateAnimState(dx, dy) {
+  isMoving = (dx !== 0 || dy !== 0);
+  if (isMoving) {
+    if (dx < 0) direction = 2; // left
+    else if (dx > 0) direction = 0; // right
+    else if (dy < 0) direction = 1; // up
+    else direction = 3; // down
+  } else {
+    direction = prevDirection;
+  }
+  
+  const useIdle = !isMoving;
+  if (useIdle) {
+  currentImage = playerSprite;
+  currentRow = 0;
 
-  if (newY < 0 || newY >= map.length || newX < 0 || newX >= map[0].length) return;
-  if (map[newY][newX] !== "#") {
-    player.x = newX;
-    player.y = newY;
+  currentFrameStart = prevDirection * 6;
+  currentAnimLength = 6;
+} else {
+  currentImage = runSprite;
+  currentRow = 0;
+  currentFrameStart = direction * 6;
+  currentAnimLength = 6;
+}
+  
+  if (direction !== prevDirection || useIdle !== prevUseIdle) {
+    playerFrame = 0;
+  }
+  prevDirection = direction;
+  prevUseIdle = useIdle;
+}
+
+// Global for prev
+let prevUseIdle = true;
+
+// Uppdatera
+function update() {
+  let dx = 0, dy = 0;
+  if (keys["ArrowLeft"] || keys["a"]) dx = -1;
+  if (keys["ArrowRight"] || keys["d"]) dx = 1;
+  if (keys["ArrowUp"] || keys["w"]) dy = -1;
+  if (keys["ArrowDown"] || keys["s"]) dy = 1;
+
+  if (dx !== 0 && dy !== 0) {
+    dx *= 0.707;
+    dy *= 0.707;
+  }
+
+  updateAnimState(dx, dy);
+
+  player.vx = dx * moveSpeed;
+  player.vy = dy * moveSpeed;
+
+  const nextTileX = Math.floor(player.x + player.vx);
+  const nextTileY = Math.floor(player.y + player.vy);
+
+  if (nextTileY >= 0 && nextTileY < map.length && nextTileX >= 0 && nextTileX < map[0].length && map[nextTileY][nextTileX] !== "#") {
+    player.x += player.vx;
+    player.y += player.vy;
+  } else {
+    player.vx = 0;
+    player.vy = 0;
   }
 }
 
-// Rendera karta och spelare
+// Draw
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
@@ -154,10 +218,11 @@ function draw() {
     }
   }
 
-  if (playerSpriteLoaded) {
-    const frameIndex = playerFrame % Math.max(1, playerAnimLength);
-    const sx = (playerFrameStart + frameIndex) * playerFrameWidth;
-    const sy = playerRow * playerFrameHeight + playerSourceYOffset;
+  if (playerSpriteLoaded && runSpriteLoaded) {
+    const frameIndex = playerFrame % Math.max(1, currentAnimLength);
+    const sx = (currentFrameStart + frameIndex) * playerFrameWidth;
+    const sy = currentRow * playerFrameHeight + playerSourceYOffset;
+    console.log(`Frame info: image=${currentImage.src.split('/').pop()}, row=${currentRow}, frameIndex=${frameIndex}, sx=${sx}, sy=${sy}, dir=${direction}, moving=${isMoving}`);
 
     const maxFitScale = Math.max(1, Math.floor(tileSize / playerFrameHeight));
     const scale = fitToTile ? Math.max(1, Math.min(playerDrawScale, maxFitScale)) : Math.max(1, playerDrawScale);
@@ -167,6 +232,17 @@ function draw() {
     const destX = player.x * tileSize + Math.floor((tileSize - destW) / 2);
     const destY = player.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
 
+    ctx.drawImage(currentImage, sx, sy, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
+  } else if (playerSpriteLoaded) {
+    const frameIndex = playerFrame % Math.max(1, playerAnimLength);
+    const sx = (playerFrameStart + frameIndex) * playerFrameWidth;
+    const sy = playerRow * playerFrameHeight + playerSourceYOffset;
+    console.log(`Fallback: sx=${sx}, sy=${sy}`);
+    const scale = playerDrawScale;
+    const destW = playerFrameWidth * scale;
+    const destH = playerFrameHeight * scale;
+    const destX = player.x * tileSize + Math.floor((tileSize - destW) / 2);
+    const destY = player.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
     ctx.drawImage(playerSprite, sx, sy, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
   } else {
     ctx.fillStyle = "blue"; 
@@ -180,8 +256,9 @@ function gameLoop() {
   frameTick++;
   if (frameTick >= frameTickRate) {
     frameTick = 0;
-    playerFrame = (playerFrame + 1) % Math.max(1, playerAnimLength);
+    playerFrame = (playerFrame + 1) % Math.max(1, currentAnimLength);
   }
   draw();
   requestAnimationFrame(gameLoop);
 }
+
