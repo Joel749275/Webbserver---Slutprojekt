@@ -22,19 +22,27 @@ const tileSize = 32;
 
 // Karta (test)
 const map = [
-  "####################",
-  "#..................#",
-  "#..................#",
-  "#..................#",
-  "#..................#",
-  "#.........P........#",
-  "#..................#",
-  "####################"
+  "################################",
+  "#..............................#",
+  "#..............................#",
+  "#..............#...............#",
+  "#..............#...............#",
+  "#..............#...............#",
+  "#..............#...............#",
+  "#..............................#",
+  "#..............................#",
+  "#..............#...............#",
+  "#..............#...............#",
+  "#..............#...............#",
+  "#..............#...............#",
+  "#..............................#",
+  "#..............................#",
+  "################################",
 ];
 
 function setCanvasSize() {
-  canvas.width = map[0].length * tileSize;
-  canvas.height = map.length * tileSize;
+  canvas.width = 640;
+  canvas.height = 480;
 }
 
 // Tile-mappning: vilket område i tilesetet motsvarar ett tecken
@@ -189,17 +197,35 @@ function update() {
   player.vx = dx * moveSpeed;
   player.vy = dy * moveSpeed;
 
-  const nextTileX = Math.floor(player.x + player.vx);
-  const nextTileY = Math.floor(player.y + player.vy);
+function isSolid(x, y) {
+  const col = Math.floor(x);
+  const row = Math.floor(y);
+  if (row < 0 || row >= map.length || col < 0 || col >= map[0].length) return true;
+  return map[row][col] === "#";
+}
 
-  if (nextTileY >= 0 && nextTileY < map.length && nextTileX >= 0 && nextTileX < map[0].length && map[nextTileY][nextTileX] !== "#") {
-    player.x += player.vx;
-    player.y += player.vy;
-    socket.emit("move", { x: player.x, y: player.y });
-  } else {
-    player.vx = 0;
-    player.vy = 0;
-  }
+// Hitbox vid spelarens fötter
+const cx = player.x + 0.5;
+const cy = player.y + 0.85;
+const hw = 0.3;
+const hh = 0.2;
+
+const nx = cx + player.vx;
+const ny = cy + player.vy;
+
+// Kolla X separat
+if (!isSolid(nx - hw, cy - hh) && !isSolid(nx + hw, cy - hh) &&
+    !isSolid(nx - hw, cy + hh) && !isSolid(nx + hw, cy + hh)) {
+  player.x += player.vx;
+}
+
+// Kolla Y separat
+if (!isSolid(cx - hw, ny - hh) && !isSolid(cx + hw, ny - hh) &&
+    !isSolid(cx - hw, ny + hh) && !isSolid(cx + hw, ny + hh)) {
+  player.y += player.vy;
+}
+
+socket.emit("move", { x: player.x, y: player.y, direction: direction });
 }
 
 // Draw
@@ -207,6 +233,11 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
   try { canvas.style.imageRendering = 'pixelated'; } catch (e) {}
+
+  const camX = Math.max(0, Math.min(player.x * tileSize - canvas.width / 2,  map[0].length * tileSize - canvas.width));
+const camY = Math.max(0, Math.min(player.y * tileSize - canvas.height / 2, map.length    * tileSize - canvas.height));
+ctx.save();
+ctx.translate(-camX, -camY);
 
   for (let row = 0; row < map.length; row++) {
     for (let col = 0; col < map[row].length; col++) {
@@ -274,10 +305,8 @@ function draw() {
     ctx.fillStyle = "blue"; 
     ctx.fillRect(player.x * tileSize, player.y * tileSize, tileSize, tileSize);
   }
+  ctx.restore();
 }
-
-// Inuti update(), efter att player.x/y uppdaterats:
-socket.emit("move", { x: player.x, y: player.y, direction: direction });
 
 // Huvudloop
 function gameLoop() {
