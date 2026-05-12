@@ -206,9 +206,9 @@ function isSolid(x, y) {
 
 // Hitbox vid spelarens fötter
 const cx = player.x + 0.5;
-const cy = player.y + 0.85;
+const cy = player.y + 1.7;
 const hw = 0.3;
-const hh = 0.2;
+const hh = 0.3;
 
 const nx = cx + player.vx;
 const ny = cy + player.vy;
