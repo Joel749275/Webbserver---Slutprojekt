@@ -16,7 +16,17 @@ io.on("connection", (socket) => {
   players[socket.id] = { x: 5, y: 5 };
 
   socket.emit("currentPlayers", players);
-  socket.broadcast.emit("playerJoined", { id: socket.id, x: 5, y: 5 });
+  socket.broadcast.emit("playerJoined", { id: socket.id, x: 5, y: 5, name: players[socket.id].name ?? "Anonym" });
+
+  socket.on("chat", (msg) => {
+  const safeName = players[socket.id]?.name ?? socket.id.slice(0, 5);
+  const safeMsg  = String(msg).slice(0, 200);
+  io.emit("chat", { name: safeName, msg: safeMsg });
+  });
+
+socket.on("setName", (name) => {
+  if (players[socket.id]) players[socket.id].name = String(name).slice(0, 20);
+});
 
   socket.on("move", (data) => {
     if (players[socket.id]) {

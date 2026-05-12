@@ -6,3 +6,28 @@ body {
   align-items: center;
   height: 100vh;
 }
+#chat {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 280px;
+}
+#chatLog {
+  background: rgba(0,0,0,0.6);
+  color: white;
+  font-size: 13px;
+  padding: 8px;
+  height: 150px;
+  overflow-y: auto;
+  border-radius: 6px 6px 0 0;
+}
+#chatInput {
+  width: 100%;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.8);
+  border: none;
+  color: white;
+  font-size: 13px;
+  border-radius: 0 0 6px 6px;
+  box-sizing: border-box;
+}

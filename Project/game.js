@@ -6,9 +6,34 @@ socket.on("currentPlayers", (players) => {
     if (id !== socket.id) otherPlayers[id] = players[id];
   }
 });
-socket.on("playerJoined", (data) => { otherPlayers[data.id] = { x: data.x, y: data.y }; });
+socket.on("playerJoined", (data) => { otherPlayers[data.id] = { x: data.x, y: data.y, name: data.name ?? "Anonym" }; });
 socket.on("playerMoved",  (data) => { if (otherPlayers[data.id]) { otherPlayers[data.id].x = data.x; otherPlayers[data.id].y = data.y; otherPlayers[data.id].direction = data.direction; }});
 socket.on("playerLeft",   (id)   => { delete otherPlayers[id]; });
+
+// Sätt spelarnamn (kan du ändra till en input om du vill)
+const myName = prompt("Vad heter du?") || "Anonym";
+socket.emit("setName", myName);
+
+// Ta emot chattmeddelanden
+socket.on("chat", (data) => {
+  const log = document.getElementById("chatLog");
+  const p   = document.createElement("p");
+  p.style.margin = "2px 0";
+  p.innerHTML = `<b style="color:#5bc0eb">${data.name}:</b> ${data.msg}`;
+  log.appendChild(p);
+  log.scrollTop = log.scrollHeight;
+});
+
+// Skicka meddelande med Enter
+document.getElementById("chatInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    const input = document.getElementById("chatInput");
+    const msg   = input.value.trim();
+    if (msg) socket.emit("chat", msg);
+    input.value = "";
+    e.preventDefault(); // hindrar Enter från att röra spelaren
+  }
+});
 
 
 // Init: canvas och tileset
@@ -232,80 +257,75 @@ socket.emit("move", { x: player.x, y: player.y, direction: direction });
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
-  try { canvas.style.imageRendering = 'pixelated'; } catch (e) {}
 
-  const camX = Math.max(0, Math.min(player.x * tileSize - canvas.width / 2,  map[0].length * tileSize - canvas.width));
-const camY = Math.max(0, Math.min(player.y * tileSize - canvas.height / 2, map.length    * tileSize - canvas.height));
-ctx.save();
-ctx.translate(-camX, -camY);
+  const camX = Math.round(Math.max(0, Math.min(player.x * tileSize - canvas.width / 2,  map[0].length * tileSize - canvas.width)));
+  const camY = Math.round(Math.max(0, Math.min(player.y * tileSize - canvas.height / 2, map.length    * tileSize - canvas.height)));
+  ctx.save();
+  ctx.translate(-camX, -camY);
 
+  // Rita karta
   for (let row = 0; row < map.length; row++) {
     for (let col = 0; col < map[row].length; col++) {
       const tile = map[row][col];
       const x = col * tileSize;
       const y = row * tileSize;
-
       if (tilesetLoaded && tileMap[tile]) {
         const t = tileMap[tile];
-        const sx = t.tx * tileSize;
-        const sy = t.ty * tileSize;
-        ctx.drawImage(tileset, sx, sy, tileSize, tileSize, x, y, tileSize, tileSize);
+        ctx.drawImage(tileset, t.tx * tileSize, t.ty * tileSize, tileSize, tileSize, x, y, tileSize, tileSize);
       } else {
-        if (tile === '#') {
-          ctx.fillStyle = "gray";
-        } else if (tile === 'P') {
-          ctx.fillStyle = "green";
-        } else {
-          ctx.fillStyle = "lightgreen";
-        }
+        ctx.fillStyle = tile === '#' ? "gray" : "lightgreen";
         ctx.fillRect(x, y, tileSize, tileSize);
       }
     }
   }
 
+  // Rita andra spelare + deras namn
   for (const id in otherPlayers) {
-  const o = otherPlayers[id];
-  const scale = playerDrawScale;
-  const destW = playerFrameWidth * scale;
-  const destH = playerFrameHeight * scale;
-  const destX = o.x * tileSize + Math.floor((tileSize - destW) / 2);
-  const destY = o.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
-  const sx = (o.direction ?? 3) * 6 * playerFrameWidth;
-  const sy = 0;
-  ctx.drawImage(playerSprite, sx, sy, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
-  }
-
-  if (playerSpriteLoaded && runSpriteLoaded) {
-    const frameIndex = playerFrame % Math.max(1, currentAnimLength);
-    const sx = (currentFrameStart + frameIndex) * playerFrameWidth;
-    const sy = currentRow * playerFrameHeight + playerSourceYOffset;
-    console.log(`Frame info: image=${currentImage.src.split('/').pop()}, row=${currentRow}, frameIndex=${frameIndex}, sx=${sx}, sy=${sy}, dir=${direction}, moving=${isMoving}`);
-
-    const maxFitScale = Math.max(1, Math.floor(tileSize / playerFrameHeight));
-    const scale = fitToTile ? Math.max(1, Math.min(playerDrawScale, maxFitScale)) : Math.max(1, playerDrawScale);
-    const destW = playerFrameWidth * scale;
-    const destH = playerFrameHeight * scale;
-
-    const destX = player.x * tileSize + Math.floor((tileSize - destW) / 2);
-    const destY = player.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
-
-    ctx.drawImage(currentImage, sx, sy, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
-  } else if (playerSpriteLoaded) {
-    const frameIndex = playerFrame % Math.max(1, playerAnimLength);
-    const sx = (playerFrameStart + frameIndex) * playerFrameWidth;
-    const sy = playerRow * playerFrameHeight + playerSourceYOffset;
-    console.log(`Fallback: sx=${sx}, sy=${sy}`);
+    const o = otherPlayers[id];
     const scale = playerDrawScale;
     const destW = playerFrameWidth * scale;
     const destH = playerFrameHeight * scale;
-    const destX = player.x * tileSize + Math.floor((tileSize - destW) / 2);
-    const destY = player.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
-    ctx.drawImage(playerSprite, sx, sy, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
-  } else {
-    ctx.fillStyle = "blue"; 
-    ctx.fillRect(player.x * tileSize, player.y * tileSize, tileSize, tileSize);
+    const destX = o.x * tileSize + Math.floor((tileSize - destW) / 2);
+    const destY = o.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
+    const sx = (o.direction ?? 3) * 6 * playerFrameWidth;
+    ctx.drawImage(playerSprite, sx, 0, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
+
+    // Namn ovanför
+ctx.save();
+ctx.font = "bold 12px monospace";
+ctx.textAlign = "center";
+const label = o.name ?? "Anonym";
+let tw = ctx.measureText(label).width;
+// Bakgrundsplatta
+ctx.fillStyle = "rgba(0,0,0,0.6)";
+ctx.fillRect(destX + destW / 2 - tw / 2 - 3, destY - 14, tw + 6, 14);
+// Text
+ctx.fillStyle = "#f4d03f";
+ctx.fillText(label, destX + destW / 2, destY - 3);
+ctx.restore();
   }
-  ctx.restore();
+
+  // Rita din egen spelare + ditt namn
+  const scale = playerDrawScale;
+  const destW = playerFrameWidth * scale;
+  const destH = playerFrameHeight * scale;
+  const destX = player.x * tileSize + Math.floor((tileSize - destW) / 2);
+  const destY = player.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
+
+  const frameIndex = playerFrame % Math.max(1, currentAnimLength);
+  const sx = (currentFrameStart + frameIndex) * playerFrameWidth;
+  const sy = currentRow * playerFrameHeight + playerSourceYOffset;
+  ctx.drawImage(currentImage ?? playerSprite, sx, sy, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
+
+  // Ditt namn
+ctx.font = "bold 12px monospace";
+ctx.textAlign = "center";
+let tw = ctx.measureText(myName).width;
+ctx.fillStyle = "rgba(0,0,0,0.6)";
+ctx.fillRect(destX + destW / 2 - tw / 2 - 3, destY - 14, tw + 6, 14);
+ctx.fillStyle = "#ffffff";
+ctx.fillText(myName, destX + destW / 2, destY - 3);
+ctx.restore();
 }
 
 // Huvudloop
