@@ -37,6 +37,10 @@ socket.on("setName", (name) => {
     }
   });
 
+  socket.on("emoji", (emoji) => {
+  socket.broadcast.emit("playerEmoji", { id: socket.id, emoji });
+  });
+
   socket.on("disconnect", () => {
     console.log("Spelare frånkopplad:", socket.id);
     delete players[socket.id];

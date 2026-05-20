@@ -1,5 +1,18 @@
 const socket = io();
 const otherPlayers = {};
+const emojis = { "1": "👍", "2": "💀", "3": "😭", "4": "😮" };
+const playerEmojis = {}; // { [id]: { emoji, time } }
+
+document.addEventListener("keydown", (e) => {
+  if (emojis[e.key]) {
+    playerEmojis[socket.id] = { emoji: emojis[e.key], time: Date.now() };
+    socket.emit("emoji", emojis[e.key]);
+  }
+});
+
+socket.on("playerEmoji", (data) => {
+  playerEmojis[data.id] = { emoji: data.emoji, time: Date.now() };
+});
 
 socket.on("currentPlayers", (players) => {
   for (const id in players) {
@@ -10,11 +23,9 @@ socket.on("playerJoined", (data) => { otherPlayers[data.id] = { x: data.x, y: da
 socket.on("playerMoved",  (data) => { if (otherPlayers[data.id]) { otherPlayers[data.id].x = data.x; otherPlayers[data.id].y = data.y; otherPlayers[data.id].direction = data.direction; }});
 socket.on("playerLeft",   (id)   => { delete otherPlayers[id]; });
 
-// Sätt spelarnamn (kan du ändra till en input om du vill)
-const myName = prompt("Vad heter du?") || "Anonym";
+const myName = prompt("Vad heter du?") || "Player";
 socket.emit("setName", myName);
 
-// Ta emot chattmeddelanden
 socket.on("chat", (data) => {
   const log = document.getElementById("chatLog");
   const p   = document.createElement("p");
@@ -24,14 +35,13 @@ socket.on("chat", (data) => {
   log.scrollTop = log.scrollHeight;
 });
 
-// Skicka meddelande med Enter
 document.getElementById("chatInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     const input = document.getElementById("chatInput");
     const msg   = input.value.trim();
     if (msg) socket.emit("chat", msg);
     input.value = "";
-    e.preventDefault(); // hindrar Enter från att röra spelaren
+    e.preventDefault();
   }
 });
 
@@ -42,7 +52,6 @@ const ctx = canvas.getContext("2d");
 const tileset = new Image();
 tileset.src = "assets\\Modern tiles_Free\\Interiors_free\\32x32\\Room_Builder_free_32x32.png";
 
-// Konfiguration
 const tileSize = 32;
 
 // Karta (test)
@@ -176,9 +185,9 @@ document.addEventListener("keyup", (e) => { keys[e.key] = false; });
 function updateAnimState(dx, dy) {
   isMoving = (dx !== 0 || dy !== 0);
   if (isMoving) {
-    if (dx < 0) direction = 2; // left
-    else if (dx > 0) direction = 0; // right
-    else if (dy < 0) direction = 1; // up
+    if (dx < 0) direction = 2;
+    else if (dx > 0) direction = 0;
+    else if (dy < 0) direction = 1;
     else direction = 3; // down
   } else {
     direction = prevDirection;
@@ -258,12 +267,23 @@ socket.emit("move", { x: player.x, y: player.y, direction: direction });
 }
 
 // Draw
+function drawEmoji(id, x, y) {
+  const e = playerEmojis[id];
+  if (!e || Date.now() - e.time > 3000) return;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - (Date.now() - e.time) / 3000);
+  ctx.font = "20px serif";
+  ctx.textAlign = "center";
+  ctx.fillText(e.emoji, x * tileSize + tileSize / 2, y * tileSize - 5);
+  ctx.restore();
+}
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.imageSmoothingEnabled = false;
 
-  const camX = Math.round(Math.max(0, Math.min(player.x * tileSize - canvas.width / 2,  map[0].length * tileSize - canvas.width)));
-  const camY = Math.round(Math.max(0, Math.min(player.y * tileSize - canvas.height / 2, map.length    * tileSize - canvas.height)));
+  const camX = Math.round(Math.max(0, Math.min(player.x * tileSize - canvas.width / 2, map[0].length * tileSize - canvas.width)));
+  const camY = Math.round(Math.max(0, Math.min(player.y * tileSize - canvas.height / 2, map.length * tileSize - canvas.height)));
   ctx.save();
   ctx.translate(-camX, -camY);
 
@@ -283,7 +303,7 @@ function draw() {
     }
   }
 
-  // Rita andra spelare + deras namn
+  // Rita andra spelare
   for (const id in otherPlayers) {
     const o = otherPlayers[id];
     const scale = playerDrawScale;
@@ -294,42 +314,47 @@ function draw() {
     const sx = (o.direction ?? 3) * 6 * playerFrameWidth;
     ctx.drawImage(playerSprite, sx, 0, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
 
-    // Namn ovanför
-ctx.save();
-ctx.font = "bold 12px monospace";
-ctx.textAlign = "center";
-const label = o.name ?? "Anonym";
-let tw = ctx.measureText(label).width;
-// Bakgrundsplatta
-ctx.fillStyle = "rgba(0,0,0,0.6)";
-ctx.fillRect(destX + destW / 2 - tw / 2 - 3, destY - 14, tw + 6, 14);
-// Text
-ctx.fillStyle = "#f4d03f";
-ctx.fillText(label, destX + destW / 2, destY - 3);
-ctx.restore();
+    // Namn
+    ctx.save();
+    ctx.font = "bold 12px monospace";
+    ctx.textAlign = "center";
+    let tw = ctx.measureText(o.name ?? "Anonym").width;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(destX + destW / 2 - tw / 2 - 3, destY - 14, tw + 6, 14);
+    ctx.fillStyle = "#f4d03f";
+    ctx.fillText(o.name ?? "Anonym", destX + destW / 2, destY - 3);
+    ctx.restore();
+
+    // Emoji
+    drawEmoji(id, o.x, o.y);
   }
 
-  // Rita spelare + namn
+  // Rita spelare
   const scale = playerDrawScale;
   const destW = playerFrameWidth * scale;
   const destH = playerFrameHeight * scale;
   const destX = player.x * tileSize + Math.floor((tileSize - destW) / 2);
   const destY = player.y * tileSize + tileSize - Math.floor(playerFeetY * scale);
-
   const frameIndex = playerFrame % Math.max(1, currentAnimLength);
   const sx = (currentFrameStart + frameIndex) * playerFrameWidth;
   const sy = currentRow * playerFrameHeight + playerSourceYOffset;
   ctx.drawImage(currentImage ?? playerSprite, sx, sy, playerFrameWidth, playerFrameHeight, destX, destY, destW, destH);
 
   // Namn
-ctx.font = "bold 12px monospace";
-ctx.textAlign = "center";
-let tw = ctx.measureText(myName).width;
-ctx.fillStyle = "rgba(0,0,0,0.6)";
-ctx.fillRect(destX + destW / 2 - tw / 2 - 3, destY - 14, tw + 6, 14);
-ctx.fillStyle = "#ffffff";
-ctx.fillText(myName, destX + destW / 2, destY - 3);
-ctx.restore();
+  ctx.save();
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "center";
+  let tw = ctx.measureText(myName).width;
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(destX + destW / 2 - tw / 2 - 3, destY - 14, tw + 6, 14);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(myName, destX + destW / 2, destY - 3);
+  ctx.restore();
+
+  // Emoji
+  drawEmoji(socket.id, player.x, player.y);
+
+  ctx.restore();
 }
 
 // Huvudloop
